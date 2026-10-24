@@ -449,8 +449,15 @@
 ;*******************************************************************************************
 ;EJERCICIOS CALIFICABLES
 ;*******************************************************************************************
-;9. a
 ;
+;9. a (Sumar Dígitos)
+;letrec
+;  @cuantas[@n] = Si (@n < 10) { 0 } sino { (1 + evaluar @cuantas((@n ~ 10)) finEval) };
+;  @sumarDigitos[@n] = Si @n
+;  { ((@n ~ (10 * evaluar @cuantas(@n) finEval)) + evaluar @sumarDigitos(evaluar @cuantas(@n) finEval) finEval) }
+;  sino { 0 };
+;in
+;  evaluar @sumarDigitos(147) finEval;
 ;
 ;------------------------------------------------------
 ;
