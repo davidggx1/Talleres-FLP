@@ -1,15 +1,16 @@
 #lang eopl
+(require racket/string)
 
 ;*******************************************************************************************
 ; Interpretador
 
 ;; La definición BNF para las expresiones del lenguaje:
 ;;
-;;  <programa>          := <expresion>(
+;;  <programa>          := <expresion>
 ;;                         un-program (exp)
 ;;  <expresion>         := <numero>
-;;                         numero-lit (num
-;;                      := "\""<texto>"\""
+;;                         numero-lit (num)
+;;                      := <texto>
 ;;                         text-lit (txt)
 ;;                      := <identificador>
 ;;                         var-exp (id)
@@ -17,6 +18,16 @@
 ;;                         primapp-bin-exp (exp1 prim-binaria exp2)
 ;;                      := <primitiva-unaria> (<expresion>)
 ;;                         primapp-un-exp (prim-unaria exp)
+;;                      := si <expresion> {<expresion>} sino {<expresion>}
+;;                         condicional-exp
+;;                      := declarar (arbno <var-exp> = <exp> ;) {<exp>}
+;;                         variable-local-exp
+;;                      := procedimiento (separated-list <identificador> ,) {<exp>}
+;;                      := procedmiento-exp
+;;                      := evaluar
+;;                      := letrec {identificador ({identificador}*(,)) = <expresion>}* in <expresion>
+;;                         <letrec-exp proc-names idss bodies bodyletrec>
+
 ;;  <primitiva-binaria> := + (primitiva-suma)
 ;;                      := ~ (primitiva-resta)
 ;;                      := / (primitiva-div)
@@ -28,10 +39,12 @@
 ;;                      := <= (primitiva-menor-igual)
 ;;                      := =! (primitiva-diferente)
 ;;                      := == (primitiva-comparador-igual)
+
 ;;  <primitiva-unaria>  := longitud (primitiva-longitud)
 ;;                      := add1 (primitiva-add1)
 ;;                      := sub1 (primitiva-sub1)
 ;;                      := neg (primitiva-negacion-booleana)
+
 ;*******************************************************************************************
 
 ;*******************************************************************************************
@@ -53,8 +66,14 @@
     (decimal-negativo ("-" digit(arbno digit) "." digit (arbno digit)) number)
     (entero-positivo (digit (arbno digit)) number)
     (entero-negativo ("-" digit (arbno digit)) number)
-    (texto (letter (arbno (or letter digit "_"))) string) ; por revisar
-    (identificador ("@" letter (arbno letter)) symbol) ; por revisar
+    (texto ((or letter "_") (arbno (or letter digit "_" ":"))) string)
+    (identificador ("@" letter (arbno letter)) symbol)
+
+    ; Reglas para entradas inválidas.
+    ; Números mal formados: "3." , "-3." , ".5"
+    (numero-invalido (digit (arbno digit) ".") string)
+    (numero-invalido ("-" digit (arbno digit) ".") string)
+    (numero-invalido ("." digit (arbno digit)) string)
     ))
 ;*******************************************************************************************
 
@@ -87,15 +106,39 @@
     ; Texto
     (expresion ("\""texto"\"") texto-lit)
 
-    ; Expresiones a las que se les aplica una primitiva
-    (expresion ("("expresion primitiva-binaria expresion")") primapp-bin-exp) ;faltaban los parentesis "(" y ")" para que funcionara jajaj
-    (expresion (primitiva-unaria expresion) primapp-un-exp)
+
+    ; Primitiva Binaria
+    (expresion ("("expresion primitiva-binaria expresion")") primitiva-binaria-expresion)
+
+    ; Primitiva Unaria
+    (expresion (primitiva-unaria "(" expresion ")") primitiva-unaria-expresion)
 
     ; Extensiones de la gramatica:
-    ; If-else (condicionales)
-    (expresion ("si" expresion "{"expresion"}"
-                "sino" "{"expresion"}") condicional-exp)
+    ;punto 4 If-else (condicionales)
+    (expresion ("Si" expresion
+                "{"expresion"}" ; #t
+                "sino" "{"expresion"}") ; #f
+               condicional-exp) ; name
     
+    ;punto 5 declarar (variables locales)
+    (expresion ("declarar" "("(arbno identificador "=" expresion ";")")"
+                           "{" expresion "}") variable-local-exp)
+
+    
+    ;punto 6 procedimiento
+    (expresion ("procedimiento"
+                "(" (separated-list identificador ",") ")" ; # parametros
+                "{" expresion "}")
+                procedimiento-exp)
+
+    ;punto 7 evaluar
+    (expresion ("evaluar" expresion
+                "(" (separated-list expresion ",") ")"
+                "finEval") aplicar-exp)
+
+    ;punto 8 letrec (llamados recursivos)
+    (expresion  ("letrec" (arbno identificador "[" (separated-list identificador ",") "]" "=" expresion ";") "in" expresion ";")
+                letrec-exp)
 
     ; Primitiva Binaria
     (primitiva-binaria ("+") primitiva-suma)
@@ -115,12 +158,6 @@
     (primitiva-unaria ("add1") primitiva-add1)
     (primitiva-unaria ("sub1") primitiva-sub1)
     (primitiva-unaria ("neg") primitiva-negacion-booleana)
-
-
-    
-
-
-
     
     ))
 ;*******************************************************************************************
@@ -175,22 +212,69 @@
       (var-exp (identificador) (buscar-variable amb identificador))
       (texto-lit (texto) texto)
 
-      ;(primapp-exp (prim rands)
-       ;            (let ((args (eval-rands rands env)))          Falta hacer para los casos de unaria y binaria para poder probar los siguientes pasos
-        ;             (apply-primitive prim args)))
+      (primitiva-binaria-expresion (expresion1 operador expresion2)
+                   (evaluar-primitiva-binaria
+                            operador
+                            (evaluar-expresion expresion1 amb)
+                            (evaluar-expresion expresion2 amb)))
+      
+      (primitiva-unaria-expresion (operador expresion)
+                                  (evaluar-primitiva-unaria
+                                   operador
+                                   (evaluar-expresion expresion amb)))
 
       (condicional-exp (test-exp true-exp false-exp) ;4
-              (if (valor-verdad? (evaluar-expresion test-exp amb))
+              (if (valor-verdad (evaluar-expresion test-exp amb))
                   (evaluar-expresion true-exp amb)
                   (evaluar-expresion false-exp amb)))
-      ;5
-      (procedimiento-ex (ids cuerpo) (cerradura ids cuerpo amb));6
-      (else "TODO")
-      )))
+      
+      ;5    
+      (variable-local-exp (ids exps cuerpo)
+                         (let((valores (eval-exps exps amb)))
+                           (evaluar-expresion cuerpo(ambiente-extendido ids valores amb))
+                           ))
 
-;(expresion ("Si" expresion "{"expresion"}"
- ;               "sino" "{"expresion"}") condicional-exp)
-       ; Falta implementar la evluacion de expresiones
+      ;6
+      (procedimiento-exp (ids cuerpo) (cerradura ids cuerpo amb))
+
+      ;7
+      (aplicar-exp (exp exps)
+               (let ((proc (evaluar-expresion exp amb))
+                     (args (eval-exps exps amb)))
+                 (if (procVal? proc)
+                     (aplicar-procedimiento proc args)
+                     (eopl:error 'evaluar-expresion "Attempt to apply non-procedure ~s" proc))))
+
+     ;8
+      (letrec-exp (proc-names idss bodies letrec-body)
+                 (evaluar-expresion letrec-body
+                  (ambiente-extendido-recursivo proc-names idss bodies amb))))))
+
+(define evaluar-primitiva-binaria
+  (lambda (primitiva expresion1 expresion2)
+    (cases primitiva-binaria primitiva
+      (primitiva-suma () (+ expresion1 expresion2))
+      (primitiva-resta () (- expresion1 expresion2))
+      (primitiva-div () (/ expresion1 expresion2))
+      (primitiva-multi () (* expresion1 expresion2))
+      (primitiva-concat () (string-append expresion1 expresion2)) ; no funciona el texto
+      (primitiva-mayor () (condicional? '> expresion1 expresion2))
+      (primitiva-menor () (condicional? '< expresion1 expresion2))
+      (primitiva-mayor-igual () (condicional? '>= expresion1 expresion2)) ; >=
+      (primitiva-menor-igual () (condicional? '<= expresion1 expresion2))
+      (primitiva-diferente () (condicional? '!= expresion1 expresion2))
+      (primitiva-comparador-igual () (condicional? '== expresion1 expresion2))
+    )))
+
+(define evaluar-primitiva-unaria
+  (lambda (primitiva expresion)
+    (cases primitiva-unaria primitiva
+      (primitiva-longitud () (string-length expresion))
+      (primitiva-add1 () (+ expresion 1))
+      (primitiva-sub1 () (- expresion 1))
+      (primitiva-negacion-booleana () (negacion-booleana expresion))
+      ))) 
+
 ;*******************************************************************************************
 
 ;*******************************************************************************************
@@ -201,9 +285,14 @@
   (ambiente-vacio)
   (ambiente-extendido-record (simbolos (list-of symbol?))
                        (vals (list-of scheme-value?))
-                       (env ambiente?)))
+                       (env ambiente?))
+  (ambiente-extendido-recursivo-record
+                              (proc-names(list-of symbol?))
+                              (idss (list-of (list-of symbol?)))
+                              (bodies (list-of expresion?))
+                              (env ambiente?)))
 
-;datatype de procedimientos
+;datatype de procedimientos (cerradura == closure == clausura)
 (define-datatype procVal procVal?
   (cerradura
    (list-ID (list-of symbol?))
@@ -225,7 +314,13 @@
   (lambda (simbolos vals env)
     (ambiente-extendido-record simbolos vals env)))
 
-;Aply-env
+; Ambiente extendido recursivo
+(define ambiente-extendido-recursivo 
+  (lambda (proc-names idss bodies old-env)
+    (ambiente-extendido-recursivo-record proc-names idss bodies old-env)))
+
+
+;Apply-env
 (define buscar-variable
   (lambda (env sym)
     (cases ambiente env
@@ -234,16 +329,72 @@
                            (let ((pos (list-find-position sym simbolos)))
                              (if (number? pos)
                                  (list-ref vals pos)
-                                 (buscar-variable env sym)))))))
+                                 (buscar-variable env sym))))
+      (ambiente-extendido-recursivo-record (proc-names idss bodies old-env)
+            (let ((pos (list-find-position sym proc-names)))
+               (if (number? pos)
+                   (cerradura (list-ref idss pos)
+                            (list-ref bodies pos)
+                            env)
+                   (buscar-variable old-env sym)))))))
+     
 
 ;Funciones Auxiliares
 
-; Funcion para simular booleanos
-(define valor-verdad?
+; logica inversa de valor-verdad?
+(define negacion-booleana
   (lambda (numero)
-    (not (zero? numero))
-    )
-  )
+    (if (zero? numero) 1 0))) 
+
+(define mayor-numero?
+  (lambda (numero)
+    (if (> numero 0) 1 0)))
+
+(define mayor-igual-numero?
+  (lambda (numero)
+    (if (eqv? numero 0)
+        1
+        (mayor-numero? numero))))
+
+(define igualdad
+  (lambda (expresion1 expresion2)
+    (if (eqv? expresion1 expresion2) 1 0)))
+
+(define desigualdad
+  (lambda (expresion1 expresion2)
+    (if (eqv? expresion1 expresion2) 0 1)))
+
+(define condicional?
+  (lambda (operador expresion1 expresion2)
+    (cond
+      [(equal? '> operador) (mayor-numero? (- expresion1 expresion2))]
+      [(equal? '< operador) (mayor-numero? (- expresion2 expresion1))]
+      [(equal? '>= operador) (mayor-igual-numero? (- expresion1 expresion2))]
+      [(equal? '<= operador) (mayor-igual-numero? (- expresion2 expresion1))]
+      [(equal? '!= operador) (desigualdad expresion1 expresion2)]
+      [(equal? '== operador) (igualdad expresion1 expresion2)]
+      [else (eopl:error 'condicional? "Operador no soportado ~s" operador)])))
+
+; Funcion para evaluar cada expresión de la lista en el ambiente dado y devuelve la lista
+; de resultados en el mismo orden
+(define eval-exps
+  (lambda (list-exps amb)
+    (if (null? list-exps)
+        '()
+        (cons
+         (evaluar-expresion (car list-exps) amb)
+         (eval-exps (cdr list-exps) amb)))))
+
+;Funcion para evaluar el cuerpo de un procedimiento en el ambiente extendido
+;recibe un procedimiento, una lista de valores y retorna un valor
+(define aplicar-procedimiento
+  (lambda (proc args)
+    (cases procVal proc
+      (cerradura (ids body amb)
+                 (evaluar-expresion body (ambiente-extendido ids args amb))))))
+                 
+                 
+
 
 ; funciones auxiliares para encontrar la posición de un símbolo
 ; en la lista de símbolos de unambiente
@@ -274,95 +425,108 @@
 ; Funcion para simular booleanos
 (define valor-verdad
   (lambda (numero)
-    (not (zero? numero))
-    )
-  )
+    (not (zero? numero))))
 
+; idea
+; (3 4)
+; plus (3 4)
+; if (= 3 0) #f -> (+ 1 (plus 2 4))
 
+; ejercicio 9. c
+(define plus
+  (lambda (x y)
+    (if (= x 0)
+        y
+        (+ 1 (plus (- x 1) y)))))
 
-
+(define multiplicar
+  (lambda (x y)
+    (if (= x 0)
+        0
+        (+ y (multiplicar (- x 1) y)))))
+        
+; multiplicar (3 4) => 4 + 4 + 4
 ;*******************************************************************************************
-
+;EJERCICIOS CALIFICABLES
 ;*******************************************************************************************
+;9. a
+;
+;
+;------------------------------------------------------
+;
+; 9. b (Suma Naturales N)
+; letrec
+; @sumaN[@n] = Si @n
+; {(@n + evaluar @sumaN(sub1(@n)) finEval)}
+; sino {0};
+; in
+;  evaluar @sumaN(5) finEval; -->Resultado: 15
+;
+; letrec
+; @sumaN[@n] = Si @n
+; {(@n + evaluar @sumaN(sub1(@n)) finEval)}
+; sino {0};
+; in
+;  evaluar @sumaN(10) finEval; -->Resultado: 55
 
-; eval-rands
-;(define eval-rands
-;  (lambda (rands env)
-;    (map (lambda (x) (eval-rand x env)) rands)))
-
-; eval-rand
-;(define eval-rand
-;  (lambda (rand env)
-;    (eval-expression rand env)))
-      
-
-;apply-primitive: <primitiva> <list-of-expression> -> numero
-;(define apply-primitive
-  ;(lambda (prim args)
-   ; (cases primitive prim
-    ;  (add-prim () (+ (car args) (cadr args)))
-     ; (substract-prim () (- (car args) (cadr args)))
-      ;(mult-prim () (* (car args) (cadr args)))
-      ;(incr-prim () (+ (car args) 1))
-      ;(decr-prim () (- (car args) 1)))))
-
-;faltantes:---------------------------
-; * evaluar-primitiva-binaria
-; * evaluar-primitiva-unaria 
+;------------------------------------------------------
+;
+; 9. c
+; letrec
+; @multiplicar[@a, @b] = Si @a
+; {(@b + evaluar @multiplicar(sub1(@a), @b) finEval)}
+; sino {0};
+; in
+;  evaluar @multiplicar(3, 4) finEval;
+;------------------------------------------------------
+;
+; 9. d
 
 
 
-    
-;*******************************************************************************************
-; Errores por solucionar (TODOs)
-;*******************************************************************************************
 
-; 1. El punto decimal suelto se ignora (No lanza error léxico)
-; (just-scan "3.")
-; return ((entero-positivo 3 1))
-; Deberia salir error porque obligamos a poner un numero despues del punto.
-; CAUSA: El scanner lee el "3" como entero-positivo, y al ver el "." (que no
-;        matchea con ninguna regla que empiece con punto) simplemente lo ignora.
-; SOLUCION: Agregar una regla al final del scanner que atrape el punto suelto
-;           o cualquier caracter invalido y lance un error, por ejemplo:
-;           (error-caracter (".") error) o (error-caracter (any) error)
 
-; 2. El punto decimal sin numero entero se ignora
-; (just-scan ".5")
-; return ()
-; Deberia salir error porque en nuestra gramatica exigimos un digito antes del punto.
-; CAUSA: Igual que el caso anterior, el "." no matchea con ninguna regla,
-;        entonces el scanner lo ignora y deja el "5" para ser escaneado.
-; SOLUCION: La misma que el caso 1. Atrapar el punto suelto o caracteres invalidos.
+;
+;---9e---
+;;@integrantes es un procedimiento el cual declara dentro cuatro variables locales y las devuelve concatenadas
+;;
+;;@saludar es un procedimiento que recibe otro procedimiento y devuelve otro procedimiento que al ejecutarse llama
+;;a @f y le concatena "Hola:" al inicio de su resultado
+;;
+;;@decorate guarda el procedimiento que devuelve @saludar al recibir @integrantes y al invocarlo con 'evaluar @decorate() finEval'
+;;se obtiene el saludo
+;;
+;;Resultado esperado: "Hola:Daniel_y_Brandon_y_David_y_Lasprilla"
+;
+;declarar(
+;
+;@integrantes = procedimiento () { declarar (
+;@nomuno = "Daniel_y_";
+;@nomdos = "Brandon_y_";
+;@nomtres = "David_y_";
+;@nomcuatro = "Lasprilla";
+;) {
+;((@nomuno concat @nomdos) concat (@nomtres concat @nomcuatro))
+;}
+;};
+;
+;
+;@saludar = procedimiento (@f) { procedimiento () { ("Hola:"  concat evaluar @f() finEval) } };
+;){ declarar (
+;@decorate = evaluar @saludar(@integrantes) finEval;
+;){
+;evaluar @decorate() finEval
+;}
+;}
+;
+;------------------------------------------------------
+;
+; 9. f
+;
+;
+;
+;------------------------------------------------------
 
-; 3. Identificadores sin "@" se ignoran silenciosamente
-; (just-scan "variable")
-; return ()
-; Deberia salir error porque definimos que los identificadores deben empezar con "@".
-; CAUSA: La regla (identificar ("@" letter ...)) exige el "@". Como no esta,
-;        la "v" no matchea con ninguna regla (no es numero, no es "@", etc.)
-;        y el scanner la descarta sin avisar.
-; SOLUCION: La misma. Si agregamos una regla de "error" al final, el scanner
-;           atrapa la "v" y se detiene lanzando un error lexico.
-
-; 4. Error interno de SLLGEN al escanear "- 5" (Signo separado del numero)
-; (just-scan "- 5")
-; Error: scanning: no actions found for ()
-; CAUSA: El scanner intenta leer el "-" como entero-negativo, pero al ver el
-;        espacio (whitespace) se rompe la regla ("-" digit ...). SLLGEN no sabe
-;        que hacer con el "-" huerfano y lanza un error interno.
-; SOLUCION: Verificar que la regla de entero-negativo exija que el "-" vaya
-;           pegado al digito. Al usar un catch-all de error al final, podremos
-;           interceptar este "-" y mostrar un mensaje mas amigable.
-;*******************************************************************************************
-; Expresiones en la gramatica por implementar
-; Expresión con primitiva binaria: ( exp prim-bin exp )
-; (expresion ("(" expresion primitiva-binaria expresion ")") primapp-bin-exp)
-    
-; Expresión con primitiva unaria: ( prim-un exp )
-; (expresion ("(" primitiva-unaria expresion ")") primapp-un-exp)
-;*******************************************************************************************
 
 ;; Declaración de IA: Se uso la IA para identificación de errores, deficiones de funciones y
 ;; conceptos de SLLGEN 
-
