@@ -66,7 +66,7 @@
     (decimal-negativo ("-" digit(arbno digit) "." digit (arbno digit)) number)
     (entero-positivo (digit (arbno digit)) number)
     (entero-negativo ("-" digit (arbno digit)) number)
-    (texto (letter (arbno (or letter digit "_"))) string) ; por revisar
+    (texto ((or letter "_") (arbno (or letter digit "_" ":"))) string)
     (identificador ("@" letter (arbno letter)) symbol) ; por revisar
     ))
 ;*******************************************************************************************
@@ -454,12 +454,12 @@
 ;;@integrantes es un procedimiento el cual declara dentro cuatro variables locales y las devuelve concatenadas
 ;;
 ;;@saludar es un procedimiento que recibe otro procedimiento y devuelve otro procedimiento que al ejecutarse llama
-;;a @f y le concatena "Hola" al inicio de su resultado
+;;a @f y le concatena "Hola:" al inicio de su resultado
 ;;
 ;;@decorate guarda el procedimiento que devuelve @saludar al recibir @integrantes y al invocarlo con 'evaluar @decorate() finEval'
 ;;se obtiene el saludo
 ;;
-;;Resultado esperado: "HolaDaniel_y_Brandon_y_David_y_Lasprilla"
+;;Resultado esperado: "Hola:Daniel_y_Brandon_y_David_y_Lasprilla"
 ;
 ;declarar(
 ;
@@ -474,7 +474,7 @@
 ;};
 ;
 ;
-;@saludar = procedimiento (@f) { procedimiento () { ("Hola"  concat evaluar @f() finEval) } };
+;@saludar = procedimiento (@f) { procedimiento () { ("Hola:"  concat evaluar @f() finEval) } };
 ;){ declarar (
 ;@decorate = evaluar @saludar(@integrantes) finEval;
 ;){
