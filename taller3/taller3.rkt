@@ -441,8 +441,32 @@
         
 ; multiplicar (3 4) => 4 + 4 + 4
 ;*******************************************************************************************
-;EJERCICIOS CALIFICABLES
+;EJERCICIOS CALIFICABLES (Punto 9: a,b,c,d,e,f)
 ;*******************************************************************************************
+;
+;
+;9. a
+;
+;
+;------------------------------------------------------
+;
+; 9. b (Suma Naturales N)
+; letrec
+; @sumaN[@n] = Si @n
+; {(@n + evaluar @sumaN(sub1(@n)) finEval)}
+; sino {0};
+; in
+;  evaluar @sumaN(5) finEval; -->Resultado: 15
+;
+; letrec
+; @sumaN[@n] = Si @n
+; {(@n + evaluar @sumaN(sub1(@n)) finEval)}
+; sino {0};
+; in
+;  evaluar @sumaN(10) finEval; -->Resultado: 55
+
+;------------------------------------------------------
+;
 ; 9. c
 ; letrec
 ; @multiplicar[@a, @b] = Si @a
@@ -450,7 +474,18 @@
 ; sino {0};
 ; in
 ;  evaluar @multiplicar(3, 4) finEval;
-;---9e---
+
+;------------------------------------------------------
+;
+; 9. d
+
+
+
+
+
+;------------------------------------------------------
+; 9. e
+
 ;;@integrantes es un procedimiento el cual declara dentro cuatro variables locales y las devuelve concatenadas
 ;;
 ;;@saludar es un procedimiento que recibe otro procedimiento y devuelve otro procedimiento que al ejecutarse llama
@@ -483,7 +518,13 @@
 ;}
 ;
 
-
+;------------------------------------------------------
+;
+; 9. f
+;
+;
+;
+;------------------------------------------------------
 
     
 ;*******************************************************************************************
