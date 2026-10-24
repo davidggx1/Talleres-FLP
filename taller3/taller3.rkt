@@ -66,7 +66,7 @@
     (decimal-negativo ("-" digit(arbno digit) "." digit (arbno digit)) number)
     (entero-positivo (digit (arbno digit)) number)
     (entero-negativo ("-" digit (arbno digit)) number)
-    (texto (letter (arbno (or letter digit "_"))) string) ; por revisar
+    (texto ((or letter "_") (arbno (or letter digit "_" ":"))) string)
     (identificador ("@" letter (arbno letter)) symbol) ; por revisar
     ))
 ;*******************************************************************************************
@@ -421,16 +421,28 @@
   (lambda (numero)
     (not (zero? numero))))
 
+; idea
+; (3 4)
+; plus (3 4)
+; if (= 3 0) #f -> (+ 1 (plus 2 4))
 
+; ejercicio 9. c
+(define plus
+  (lambda (x y)
+    (if (= x 0)
+        y
+        (+ 1 (plus (- x 1) y)))))
 
-
+(define multiplicar
+  (lambda (x y)
+    (if (= x 0)
+        0
+        (+ y (multiplicar (- x 1) y)))))
+        
+; multiplicar (3 4) => 4 + 4 + 4
 ;*******************************************************************************************
 ;EJERCICIOS CALIFICABLES (Punto 9: a,b,c,d,e,f)
 ;*******************************************************************************************
-<<<<<<< Updated upstream
-
-;---9e---
-=======
 ;
 ;
 ;9. a
@@ -472,18 +484,17 @@
 
 
 ;------------------------------------------------------
-
 ; 9. e
->>>>>>> Stashed changes
+
 ;;@integrantes es un procedimiento el cual declara dentro cuatro variables locales y las devuelve concatenadas
 ;;
 ;;@saludar es un procedimiento que recibe otro procedimiento y devuelve otro procedimiento que al ejecutarse llama
-;;a @f y le concatena "Hola" al inicio de su resultado
+;;a @f y le concatena "Hola:" al inicio de su resultado
 ;;
 ;;@decorate guarda el procedimiento que devuelve @saludar al recibir @integrantes y al invocarlo con 'evaluar @decorate() finEval'
 ;;se obtiene el saludo
 ;;
-;;Resultado esperado: "HolaDaniel_y_Brandon_y_David_y_Lasprilla"
+;;Resultado esperado: "Hola:Daniel_y_Brandon_y_David_y_Lasprilla"
 ;
 ;declarar(
 ;
@@ -498,7 +509,7 @@
 ;};
 ;
 ;
-;@saludar = procedimiento (@f) { procedimiento () { ("Hola"  concat evaluar @f() finEval) } };
+;@saludar = procedimiento (@f) { procedimiento () { ("Hola:"  concat evaluar @f() finEval) } };
 ;){ declarar (
 ;@decorate = evaluar @saludar(@integrantes) finEval;
 ;){
