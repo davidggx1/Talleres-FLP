@@ -67,7 +67,13 @@
     (entero-positivo (digit (arbno digit)) number)
     (entero-negativo ("-" digit (arbno digit)) number)
     (texto ((or letter "_") (arbno (or letter digit "_" ":"))) string)
-    (identificador ("@" letter (arbno letter)) symbol) ; por revisar
+    (identificador ("@" letter (arbno letter)) symbol)
+
+    ; Reglas para entradas inválidas.
+    ; Números mal formados: "3." , "-3." , ".5"
+    (numero-invalido (digit (arbno digit) ".") string)
+    (numero-invalido ("-" digit (arbno digit) ".") string)
+    (numero-invalido ("." digit (arbno digit)) string)
     ))
 ;*******************************************************************************************
 
@@ -367,7 +373,7 @@
       [(equal? '<= operador) (mayor-igual-numero? (- expresion2 expresion1))]
       [(equal? '!= operador) (desigualdad expresion1 expresion2)]
       [(equal? '== operador) (igualdad expresion1 expresion2)]
-      [else ("Operador no soportado" operador)])))
+      [else (eopl:error 'condicional? "Operador no soportado ~s" operador)])))
 
 ; Funcion para evaluar cada expresión de la lista en el ambiente dado y devuelve la lista
 ; de resultados en el mismo orden
@@ -441,10 +447,8 @@
         
 ; multiplicar (3 4) => 4 + 4 + 4
 ;*******************************************************************************************
-;EJERCICIOS CALIFICABLES (Punto 9: a,b,c,d,e,f)
+;EJERCICIOS CALIFICABLES
 ;*******************************************************************************************
-;
-;
 ;9. a
 ;
 ;
@@ -474,7 +478,6 @@
 ; sino {0};
 ; in
 ;  evaluar @multiplicar(3, 4) finEval;
-
 ;------------------------------------------------------
 ;
 ; 9. d
@@ -483,9 +486,8 @@
 
 
 
-;------------------------------------------------------
-; 9. e
-
+;
+;---9e---
 ;;@integrantes es un procedimiento el cual declara dentro cuatro variables locales y las devuelve concatenadas
 ;;
 ;;@saludar es un procedimiento que recibe otro procedimiento y devuelve otro procedimiento que al ejecutarse llama
@@ -517,7 +519,6 @@
 ;}
 ;}
 ;
-
 ;------------------------------------------------------
 ;
 ; 9. f
@@ -526,58 +527,6 @@
 ;
 ;------------------------------------------------------
 
-    
-;*******************************************************************************************
-; Errores por solucionar (TODOs)
-;*******************************************************************************************
-
-; 1. El punto decimal suelto se ignora (No lanza error léxico)
-; (just-scan "3.")
-; return ((entero-positivo 3 1))
-; Deberia salir error porque obligamos a poner un numero despues del punto.
-; CAUSA: El scanner lee el "3" como entero-positivo, y al ver el "." (que no
-;        matchea con ninguna regla que empiece con punto) simplemente lo ignora.
-; SOLUCION: Agregar una regla al final del scanner que atrape el punto suelto
-;           o cualquier caracter invalido y lance un error, por ejemplo:
-;           (error-caracter (".") error) o (error-caracter (any) error)
-
-; 2. El punto decimal sin numero entero se ignora
-; (just-scan ".5")
-; return ()
-; Deberia salir error porque en nuestra gramatica exigimos un digito antes del punto.
-; CAUSA: Igual que el caso anterior, el "." no matchea con ninguna regla,
-;        entonces el scanner lo ignora y deja el "5" para ser escaneado.
-; SOLUCION: La misma que el caso 1. Atrapar el punto suelto o caracteres invalidos.
-
-; 3. Identificadores sin "@" se ignoran silenciosamente
-; (just-scan "variable")
-; return ()
-; Deberia salir error porque definimos que los identificadores deben empezar con "@".
-; CAUSA: La regla (identificar ("@" letter ...)) exige el "@". Como no esta,
-;        la "v" no matchea con ninguna regla (no es numero, no es "@", etc.)
-;        y el scanner la descarta sin avisar.
-; SOLUCION: La misma. Si agregamos una regla de "error" al final, el scanner
-;           atrapa la "v" y se detiene lanzando un error lexico.
-
-; 4. Error interno de SLLGEN al escanear "- 5" (Signo separado del numero)
-; (just-scan "- 5")
-; Error: scanning: no actions found for ()
-; CAUSA: El scanner intenta leer el "-" como entero-negativo, pero al ver el
-;        espacio (whitespace) se rompe la regla ("-" digit ...). SLLGEN no sabe
-;        que hacer con el "-" huerfano y lanza un error interno.
-; SOLUCION: Verificar que la regla de entero-negativo exija que el "-" vaya
-;           pegado al digito. Al usar un catch-all de error al final, podremos
-;           interceptar este "-" y mostrar un mensaje mas amigable.
-;*******************************************************************************************
-; Expresiones en la gramatica por implementar
-; Expresión con primitiva binaria: ( exp prim-bin exp )
-; (expresion ("(" expresion primitiva-binaria expresion ")") primapp-bin-exp)
-    
-; Expresión con primitiva unaria: ( prim-un exp )
-; (expresion ("(" primitiva-unaria expresion ")") primapp-un-exp)
-;*******************************************************************************************
 
 ;; Declaración de IA: Se uso la IA para identificación de errores, deficiones de funciones y
 ;; conceptos de SLLGEN 
-
-
