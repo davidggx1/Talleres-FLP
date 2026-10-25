@@ -1,6 +1,12 @@
 #lang eopl
 (require racket/string)
 
+;Daniel Andres Micolta Gongora - 2422033
+;Brandon Alexis Franco Flor - 2435998
+;David Alejandro Garcia Grueso 2438175
+;Jorge Luis Junior Lasprilla Prada - 2420662
+;URL REPOSITORIO GITHUB: https://github.com/davidggx1/Talleres-FLP
+
 ;*******************************************************************************************
 ; Interpretador
 
@@ -224,7 +230,7 @@
                                    (evaluar-expresion expresion amb)))
 
       (condicional-exp (test-exp true-exp false-exp) ;4
-              (if (valor-verdad (evaluar-expresion test-exp amb))
+              (if (valor-verdad? (evaluar-expresion test-exp amb))
                   (evaluar-expresion true-exp amb)
                   (evaluar-expresion false-exp amb)))
       
@@ -423,7 +429,7 @@
   ;#(struct:ambiente-vacio))
 
 ; Funcion para simular booleanos
-(define valor-verdad
+(define valor-verdad?
   (lambda (numero)
     (not (zero? numero))))
 
@@ -445,18 +451,18 @@
 ;
 ; 9. b (Suma Naturales N)
 ; letrec
-; @sumaN[@n] = Si @n
-; {(@n + evaluar @sumaN(sub1(@n)) finEval)}
+; @sumaNaturales[@n] = Si @n
+; {(@n + evaluar @sumaNaturales(sub1(@n)) finEval)}
 ; sino {0};
 ; in
-;  evaluar @sumaN(5) finEval; -->Resultado: 15
+;  evaluar @sumaNaturales(5) finEval; -->Resultado: 15
 ;
 ; letrec
-; @sumaN[@n] = Si @n
-; {(@n + evaluar @sumaN(sub1(@n)) finEval)}
+; @sumaNaturales[@n] = Si @n
+; {(@n + evaluar @sumaNaturales(sub1(@n)) finEval)}
 ; sino {0};
 ; in
-;  evaluar @sumaN(10) finEval; -->Resultado: 55
+;  evaluar @sumaNaturales(10) finEval; -->Resultado: 55
 
 ;------------------------------------------------------
 ;
@@ -466,11 +472,10 @@
 ; {(@b + evaluar @multiplicar(sub1(@a), @b) finEval)}
 ; sino {0};
 ; in
-;  evaluar @multiplicar(3, 4) finEval;
+;  evaluar @multiplicar(4, 3) finEval;
 ;------------------------------------------------------
-;
-;---9d--- 
-;
+; 
+; 9. d
 ;;@esPar recibe un entero no negativo n y devuelve 1 (verdadero) si es par o 0 (falso) si es impar.
 ;;Como el lenguaje no tiene modulo, resta 2 en cada llamada recursiva (si n es par entonces n-2 tambien lo es)
 ;;hasta llegar a uno de los dos casos base: 0 es par y 1 es impar.
@@ -509,7 +514,8 @@
 ; evaluar @sumaParesRango (2, 16) finEval;
 ; --> Resultado: 72
 ;-------------------------------------------------------
-;---9e---
+;
+; 9. e
 ;;@integrantes es un procedimiento el cual declara dentro cuatro variables locales y las devuelve concatenadas
 ;;
 ;;@saludar es un procedimiento que recibe otro procedimiento y devuelve otro procedimiento que al ejecutarse llama
@@ -523,8 +529,8 @@
 ;declarar(
 ;
 ;@integrantes = procedimiento () { declarar (
-;@nomuno = "Daniel_y_";
-;@nomdos = "Brandon_y_";
+;@nomuno = "Daniel_";
+;@nomdos = "Brandon_";
 ;@nomtres = "David_y_";
 ;@nomcuatro = "Lasprilla";
 ;) {
@@ -550,5 +556,7 @@
 ;------------------------------------------------------
 
 
-;; Declaración de IA: Se uso la IA para identificación de errores, deficiones de funciones y
-;; conceptos de SLLGEN 
+;; Declaración de IA:
+;; Se uso como apoyo de estudio, revision, aclarar conceptos, explicar, revisar la redaccion de
+;; comentarios y entender errores. Para aclarar conceptos de SLLGEN, cerraduras, recursion y
+;; decoradores.
