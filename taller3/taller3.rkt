@@ -37,7 +37,7 @@
 ;;                      := < (primitiva-menor)
 ;;                      := >= (primitiva-mayor-igual)
 ;;                      := <= (primitiva-menor-igual)
-;;                      := =! (primitiva-diferente)
+;;                      := != (primitiva-diferente)
 ;;                      := == (primitiva-comparador-igual)
 
 ;;  <primitiva-unaria>  := longitud (primitiva-longitud)
@@ -185,7 +185,7 @@
 ; Interpretador (FrontEnd + Evaluación + Señal para lectura)
 (define interpretador
   (sllgen:make-rep-loop "--> "
-    (lambda (pgm) (evaluar-programa  pgm)) ; error porque no se ha definido eval-program
+    (lambda (pgm) (evaluar-programa  pgm))
     (sllgen:make-stream-parser 
       scanner-interpretador
       grammar-interpretador)))
@@ -196,10 +196,10 @@
 ;*******************************************************************************************
 ;                                      Nuestro intreprete
 
-; eval-program: <programa> -> numero
+; evaluar-programa: <programa> -> valor
 ; función que evalúa un programa teniendo en cuenta un ambiente
 ; dado (se inicializa dentro del programa)
-(define evaluar-programa     ;          (eval-expression body (ambiente-inicial ))))))
+(define evaluar-programa
   (lambda (pgm)
     (cases programa pgm
       (un-programa (body)
@@ -257,10 +257,10 @@
       (primitiva-resta () (- expresion1 expresion2))
       (primitiva-div () (/ expresion1 expresion2))
       (primitiva-multi () (* expresion1 expresion2))
-      (primitiva-concat () (string-append expresion1 expresion2)) ; no funciona el texto
+      (primitiva-concat () (string-append expresion1 expresion2))
       (primitiva-mayor () (condicional? '> expresion1 expresion2))
       (primitiva-menor () (condicional? '< expresion1 expresion2))
-      (primitiva-mayor-igual () (condicional? '>= expresion1 expresion2)) ; >=
+      (primitiva-mayor-igual () (condicional? '>= expresion1 expresion2))
       (primitiva-menor-igual () (condicional? '<= expresion1 expresion2))
       (primitiva-diferente () (condicional? '!= expresion1 expresion2))
       (primitiva-comparador-igual () (condicional? '== expresion1 expresion2))
@@ -427,25 +427,7 @@
   (lambda (numero)
     (not (zero? numero))))
 
-; idea
-; (3 4)
-; plus (3 4)
-; if (= 3 0) #f -> (+ 1 (plus 2 4))
 
-; ejercicio 9. c
-(define plus
-  (lambda (x y)
-    (if (= x 0)
-        y
-        (+ 1 (plus (- x 1) y)))))
-
-(define multiplicar
-  (lambda (x y)
-    (if (= x 0)
-        0
-        (+ y (multiplicar (- x 1) y)))))
-        
-; multiplicar (3 4) => 4 + 4 + 4
 ;*******************************************************************************************
 ;EJERCICIOS CALIFICABLES
 ;*******************************************************************************************
@@ -487,13 +469,46 @@
 ;  evaluar @multiplicar(3, 4) finEval;
 ;------------------------------------------------------
 ;
-; 9. d
-
-
-
-
-
+;---9d--- 
 ;
+;;@esPar recibe un entero no negativo n y devuelve 1 (verdadero) si es par o 0 (falso) si es impar.
+;;Como el lenguaje no tiene modulo, resta 2 en cada llamada recursiva (si n es par entonces n-2 tambien lo es)
+;;hasta llegar a uno de los dos casos base: 0 es par y 1 es impar.
+;;
+;;@sumaParesRango recibe los enteros a y b (con a < b) y devuelve la suma de los numeros pares
+;;en el rango [a, b]. Si a ya supero a b devuelve 0. Si a es par lo suma y sigue con a+1;
+;;si es impar solo sigue con a+1.
+;;
+;;Resultados esperados: (2, 7) -> 12 (2+4+6), (2, 8) -> 20 (2+4+6+8) y (2, 16) -> 72 (2+4+6+8+10+12+14+16)
+;
+; letrec
+; @esPar[@n] = Si (@n == 0)
+;                {1}
+;              sino
+;                { Si (@n == 1)
+;                    {0}
+;                  sino
+;                    { evaluar @esPar(sub1(sub1(@n))) finEval } };
+;
+; @sumaParesRango[@a, @b] = Si (@a > @b)
+;                {0}
+;              sino
+;                { Si evaluar @esPar(@a) finEval
+;                    { (@a + evaluar @sumaParesRango(add1(@a), @b) finEval) }
+;                  sino
+;                    { evaluar @sumaParesRango(add1(@a), @b) finEval } };
+; in
+;  evaluar @sumaParesRango (2, 7) finEval;
+;
+; --> Resultado: 12
+;
+; Con otros rangos:
+; evaluar @sumaParesRango (2, 8) finEval;
+; --> Resultado: 20
+;
+; evaluar @sumaParesRango (2, 16) finEval;
+; --> Resultado: 72
+;-------------------------------------------------------
 ;---9e---
 ;;@integrantes es un procedimiento el cual declara dentro cuatro variables locales y las devuelve concatenadas
 ;;
