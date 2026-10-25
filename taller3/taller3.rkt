@@ -37,7 +37,7 @@
 ;;                      := < (primitiva-menor)
 ;;                      := >= (primitiva-mayor-igual)
 ;;                      := <= (primitiva-menor-igual)
-;;                      := != (primitiva-diferente)
+;;                      := =! (primitiva-diferente)
 ;;                      := == (primitiva-comparador-igual)
 
 ;;  <primitiva-unaria>  := longitud (primitiva-longitud)
