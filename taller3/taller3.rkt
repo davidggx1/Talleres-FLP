@@ -169,26 +169,54 @@
 ;*******************************************************************************************
 
 ;*******************************************************************************************
-; La función show-the-datatypes permite consultar las definiciones de tipos de datos
-; que corresponden a la gramática.
+; Crea automaticamente los tipos de datos (define-datatype) de la gramatica:
+; programa, expresion, primitiva-binaria y primitiva-unaria.
 
 (sllgen:make-define-datatypes scanner-interpretador grammar-interpretador)
+
+; show-the-datatypes:
+; Proposito:
+; () -> L : Procedimiento sin parametros que retorna la lista con las definiciones de los tipos de
+; datos (define-datatype) que sllgen genera a partir de la especificacion lexica y la gramatica.
+; Sirve para consultar como quedaron los tipos de datos del lenguaje.
 (define show-the-datatypes
   (lambda () (sllgen:list-define-datatypes scanner-interpretador grammar-interpretador)))
 ;*******************************************************************************************
 
 ;*******************************************************************************************
 ; FrontEnd => Análisis léxico (scanner) y sintáctico (parser) integrados
+; scan&parse:
+; Proposito:
+; S -> Pgm : Procedimiento que recibe un string S con el codigo fuente de un programa del lenguaje,
+; lo pasa por el scanner (analisis lexico) y por el parser (analisis sintactico) y retorna su arbol
+; de sintaxis abstracta (un-programa). Si el texto no cumple la especificacion lexica o la gramatica,
+; lanza un error. Es la entrada de evaluar-programa.
+;
+; Gramatica:
+;     <programa> := <expresion>
+;                   un-programa (exp)
 ( define scan&parse
    ( sllgen:make-string-parser
      scanner-interpretador
      grammar-interpretador))
 
-; Analizador Léxico (Scanner)
+; just-scan:
+; Proposito:
+; S -> L : Procedimiento que recibe un string S y retorna la lista de tokens que produce el scanner,
+; sin pasar por el parser. Sirve para depurar la especificacion lexica (por ejemplo, ver como se
+; escanea un texto o un numero).
+;
+; Gramatica:
+;     <lista-tokens> := ()
+;                    := (<token> <lista-tokens>)
 (define just-scan
   (sllgen:make-string-scanner scanner-interpretador grammar-interpretador))
 
-; Interpretador (FrontEnd + Evaluación + Señal para lectura)
+; interpretador:
+; Proposito:
+; () -> () : Procedimiento sin parametros que inicia el ciclo lectura-evaluacion-impresion (REPL)
+; con el prompt "--> ". En cada vuelta lee un programa, lo analiza con el parser, lo evalua con
+; evaluar-programa e imprime el resultado. Es la forma de ejecutar el lenguaje de forma interactiva.
 (define interpretador
   (sllgen:make-rep-loop "--> "
     (lambda (pgm) (evaluar-programa  pgm))
@@ -202,20 +230,50 @@
 ;*******************************************************************************************
 ;                                      Nuestro intreprete
 
-; evaluar-programa: <programa> -> valor
-; función que evalúa un programa teniendo en cuenta un ambiente
-; dado (se inicializa dentro del programa)
+; evaluar-programa:
+; Proposito:
+; Pgm -> V : Procedimiento que recibe el arbol de sintaxis abstracta de un programa y retorna su valor.
+; Evalua el cuerpo del programa en el ambiente inicial (ambiente-inicial), que se crea dentro de la
+; funcion. Es el punto de entrada de la evaluacion.
+;
+; Gramatica:
+;     <programa> := <expresion>
+;                   un-programa (exp)
 (define evaluar-programa
   (lambda (pgm)
     (cases programa pgm
       (un-programa (body)
                  (evaluar-expresion body (ambiente-inicial))))))
 
+; evaluar-expresion:
+; Proposito:
+; Exp x Amb -> V : Procedimiento que recibe una expresion Exp y un ambiente Amb y retorna el valor
+; de la expresion. Segun la variante de Exp:
+;   numero-lit, texto-lit: retorna el numero o el texto.
+;   var-exp: busca la variable en el ambiente con buscar-variable.
+;   primitiva-binaria-expresion, primitiva-unaria-expresion: evalua los operandos y aplica la primitiva.
+;   condicional-exp: evalua la condicion con valor-verdad? y evalua solo la rama que corresponde.
+;   variable-local-exp (declarar): evalua las expresiones en el ambiente actual y evalua el cuerpo
+;     en el ambiente extendido con las variables.
+;   procedimiento-exp: crea una cerradura que guarda parametros, cuerpo y el ambiente donde se declaro.
+;   aplicar-exp (evaluar): evalua el procedimiento y los argumentos y los aplica con
+;     aplicar-procedimiento. Si el valor no es un procedimiento, lanza un error.
+;   letrec-exp: evalua el cuerpo en un ambiente extendido recursivo para permitir recursion.
+;
+; Gramatica:
+;     <expresion> := <numero> | <texto> | <identificador>
+;                 := (<expresion> <primitiva-binaria> <expresion>)
+;                 := <primitiva-unaria> (<expresion>)
+;                 := Si <expresion> {<expresion>} sino {<expresion>}
+;                 := declarar ({<identificador> = <expresion> ;}*) {<expresion>}
+;                 := procedimiento ({<identificador>}*(,)) {<expresion>}
+;                 := evaluar <expresion> ({<expresion>}*(,)) finEval
+;                 := letrec {<identificador> [{<identificador>}*(,)] = <expresion> ;}* in <expresion> ;
 (define evaluar-expresion 
   (lambda (exp amb)
     (cases expresion exp
       (numero-lit (numero) numero)
-      (var-exp (identificador) (buscar-variable amb identificador))
+      (var-exp (identificador) (buscar-variable identificador amb))
       (texto-lit (texto) texto)
 
       (primitiva-binaria-expresion (expresion1 operador expresion2)
@@ -256,6 +314,15 @@
                  (evaluar-expresion letrec-body
                   (ambiente-extendido-recursivo proc-names idss bodies amb))))))
 
+; evaluar-primitiva-binaria:
+; Proposito:
+; PB x V x V -> V : Procedimiento que recibe una primitiva binaria y los valores ya evaluados de sus
+; dos operandos, y retorna el resultado de aplicarla. Suma, resta (~), division y multiplicacion
+; operan sobre numeros; concat une dos textos; las comparaciones (>, <, >=, <=, !=, ==) delegan en
+; condicional? y retornan 1 (verdadero) o 0 (falso).
+;
+; Gramatica:
+;     <primitiva-binaria> := + | ~ | / | * | concat | > | < | >= | <= | != | ==
 (define evaluar-primitiva-binaria
   (lambda (primitiva expresion1 expresion2)
     (cases primitiva-binaria primitiva
@@ -272,6 +339,14 @@
       (primitiva-comparador-igual () (condicional? '== expresion1 expresion2))
     )))
 
+; evaluar-primitiva-unaria:
+; Proposito:
+; PU x V -> V : Procedimiento que recibe una primitiva unaria y el valor ya evaluado de su operando,
+; y retorna el resultado de aplicarla. longitud retorna la cantidad de caracteres de un texto; add1 y
+; sub1 suman y restan 1 a un numero; neg retorna la negacion booleana (usa negacion-booleana).
+;
+; Gramatica:
+;     <primitiva-unaria> := longitud | add1 | sub1 | neg
 (define evaluar-primitiva-unaria
   (lambda (primitiva expresion)
     (cases primitiva-unaria primitiva
@@ -305,9 +380,23 @@
    (exp expresion?)
    (amb ambiente?)))
 
+; scheme-value?:
+; Proposito:
+; V -> B : Predicado que recibe cualquier valor y siempre retorna #t. Se usa en el datatype ambiente
+; para indicar que las variables del ambiente pueden guardar valores de cualquier tipo (numeros,
+; textos o cerraduras).
 (define scheme-value? (lambda (v) #t))
 
-; Ambiente inicial
+; ambiente-inicial:
+; Proposito:
+; () -> Amb : Procedimiento sin parametros que retorna el ambiente con el que empieza todo programa:
+; las variables (@a @b @c @d @e) ligadas a los valores (1 2 3 "hola" "FLP") sobre un ambiente vacio.
+; Lo usa evaluar-programa.
+;
+; Gramatica:
+;     <ambiente> := (ambiente-vacio)
+;                := (ambiente-extendido-record {<simbolo>}* {<valor>}* <ambiente>)
+;                := (ambiente-extendido-recursivo-record {<simbolo>}* {{<simbolo>}*}* {<expresion>}* <ambiente>)
 (define ambiente-inicial
   (lambda ()
     (ambiente-extendido
@@ -315,61 +404,124 @@
      '(1 2 3 "hola" "FLP")
      (ambiente-vacio))))
 
-; Ambiente extendido
+; ambiente-extendido:
+; Proposito:
+; L x L x Amb -> Amb : Procedimiento que recibe una lista de simbolos, una lista de valores del mismo
+; tamano y un ambiente. Retorna un nuevo ambiente donde cada simbolo queda ligado a su valor y el resto
+; de variables se conservan del ambiente recibido. Si un simbolo ya existia, el nuevo valor lo oculta.
+; Lo usan declarar (variables locales) y aplicar-procedimiento (parametros de un procedimiento).
+;
+; Gramatica:
+;     <lista-simbolos> := ()
+;                      := (<simbolo> <lista-simbolos>)
 (define ambiente-extendido 
   (lambda (simbolos vals env)
     (ambiente-extendido-record simbolos vals env)))
 
-; Ambiente extendido recursivo
+; ambiente-extendido-recursivo:
+; Proposito:
+; L x L x L x Amb -> Amb : Procedimiento que recibe los nombres de los procedimientos recursivos, la
+; lista con los parametros de cada uno, la lista con los cuerpos de cada uno y un ambiente. Retorna un
+; ambiente extendido recursivo. No crea las cerraduras aqui: buscar-variable las crea al buscar un
+; nombre, usando este mismo ambiente como ambiente de la cerradura, y asi un procedimiento puede
+; llamarse a si mismo (o a los otros del mismo letrec).
+; Lo usa letrec.
+;
+; Gramatica:
+;     <lista-parametros> := ()
+;                        := (<lista-simbolos> <lista-parametros>)
+;     <lista-cuerpos>    := ()
+;                        := (<expresion> <lista-cuerpos>)
 (define ambiente-extendido-recursivo 
   (lambda (proc-names idss bodies old-env)
     (ambiente-extendido-recursivo-record proc-names idss bodies old-env)))
 
 
-;Apply-env
+; buscar-variable:
+; Proposito:
+; Sym x Amb -> V : Procedimiento que recibe un simbolo (identificador) y un ambiente y retorna el valor
+; ligado a ese simbolo. Busca desde el ambiente mas reciente hacia el mas antiguo. Si el ambiente es
+; recursivo y el simbolo es el nombre de un procedimiento, retorna una cerradura cuyo ambiente es ese
+; mismo ambiente recursivo. Si el simbolo no esta en ningun ambiente, retorna el texto
+; "Error, la variable no existe".
+;
+; Gramatica:
+;     <ambiente> := (ambiente-vacio)
+;                := (ambiente-extendido-record {<simbolo>}* {<valor>}* <ambiente>)
+;                := (ambiente-extendido-recursivo-record {<simbolo>}* {{<simbolo>}*}* {<expresion>}* <ambiente>)
 (define buscar-variable
-  (lambda (env sym)
+  (lambda (sym env)
     (cases ambiente env
       (ambiente-vacio () "Error, la variable no existe")
       (ambiente-extendido-record (simbolos vals env)
                            (let ((pos (list-find-position sym simbolos)))
                              (if (number? pos)
                                  (list-ref vals pos)
-                                 (buscar-variable env sym))))
+                                 (buscar-variable sym env))))
       (ambiente-extendido-recursivo-record (proc-names idss bodies old-env)
             (let ((pos (list-find-position sym proc-names)))
                (if (number? pos)
                    (cerradura (list-ref idss pos)
                             (list-ref bodies pos)
                             env)
-                   (buscar-variable old-env sym)))))))
+                   (buscar-variable sym old-env)))))))
      
 
 ;Funciones Auxiliares
 
-; logica inversa de valor-verdad?
+; negacion-booleana:
+; Proposito:
+; N -> N : Procedimiento que recibe un numero y retorna su negacion booleana: 1 si el numero es 0
+; (falso) y 0 en cualquier otro caso (verdadero). Es la logica inversa de valor-verdad? y la usa la
+; primitiva neg.
 (define negacion-booleana
   (lambda (numero)
     (if (zero? numero) 1 0))) 
 
+; mayor-numero?:
+; Proposito:
+; N -> N : Procedimiento que recibe un numero y retorna 1 si es mayor que 0 y 0 en caso contrario.
+; Como las comparaciones se hacen sobre la resta de los operandos, esta funcion indica el signo del
+; resultado. La usa condicional? para > y <.
 (define mayor-numero?
   (lambda (numero)
     (if (> numero 0) 1 0)))
 
+; mayor-igual-numero?:
+; Proposito:
+; N -> N : Procedimiento que recibe un numero y retorna 1 si es 0 o mayor que 0, y 0 en caso contrario.
+; La usa condicional? para >= y <=.
 (define mayor-igual-numero?
   (lambda (numero)
     (if (eqv? numero 0)
         1
         (mayor-numero? numero))))
 
+; igualdad:
+; Proposito:
+; V x V -> N : Procedimiento que recibe dos valores y retorna 1 si son equivalentes segun eqv? y 0
+; en caso contrario. La usa condicional? para el operador ==.
 (define igualdad
   (lambda (expresion1 expresion2)
     (if (eqv? expresion1 expresion2) 1 0)))
 
+; desigualdad:
+; Proposito:
+; V x V -> N : Procedimiento que recibe dos valores y retorna 0 si son equivalentes segun eqv? y 1
+; en caso contrario. Es lo contrario de igualdad y la usa condicional? para el operador !=.
 (define desigualdad
   (lambda (expresion1 expresion2)
     (if (eqv? expresion1 expresion2) 0 1)))
 
+; condicional?:
+; Proposito:
+; Sym x V x V -> N : Procedimiento que recibe el simbolo de un operador de comparacion (>, <, >=, <=,
+; != o ==) y dos valores, y retorna 1 si la comparacion se cumple y 0 si no. Para el orden resta los
+; operandos y revisa el signo con mayor-numero? o mayor-igual-numero?; para != y == usa desigualdad
+; e igualdad. Si el operador no es soportado, lanza un error.
+;
+; Gramatica:
+;     <operador> := > | < | >= | <= | != | ==
 (define condicional?
   (lambda (operador expresion1 expresion2)
     (cond
@@ -381,8 +533,15 @@
       [(equal? '== operador) (igualdad expresion1 expresion2)]
       [else (eopl:error 'condicional? "Operador no soportado ~s" operador)])))
 
-; Funcion para evaluar cada expresión de la lista en el ambiente dado y devuelve la lista
-; de resultados en el mismo orden
+; eval-exps:
+; Proposito:
+; L x Amb -> L' : Procedimiento que recibe una lista de expresiones y un ambiente. Evalua cada
+; expresion en ese ambiente y retorna la lista de resultados en el mismo orden. La usan declarar
+; (valores de las variables) y evaluar (argumentos del llamado).
+;
+; Gramatica:
+;     <lista-expresiones> := ()
+;                         := (<expresion> <lista-expresiones>)
 (define eval-exps
   (lambda (list-exps amb)
     (if (null? list-exps)
@@ -391,8 +550,13 @@
          (evaluar-expresion (car list-exps) amb)
          (eval-exps (cdr list-exps) amb)))))
 
-;Funcion para evaluar el cuerpo de un procedimiento en el ambiente extendido
-;recibe un procedimiento, una lista de valores y retorna un valor
+; aplicar-procedimiento:
+; Proposito:
+; ProcVal x L -> V : Procedimiento que recibe una cerradura y la lista de valores de los argumentos.
+; Extiende el ambiente donde fue declarada la cerradura ligando cada parametro a su argumento y evalua
+; el cuerpo en ese ambiente. Retorna el valor del cuerpo.
+; Gramatica:
+;     <procVal> := (cerradura {<simbolo>}* <expresion> <ambiente>)
 (define aplicar-procedimiento
   (lambda (proc args)
     (cases procVal proc
@@ -402,13 +566,28 @@
                  
 
 
-; funciones auxiliares para encontrar la posición de un símbolo
-; en la lista de símbolos de unambiente
-
+; list-find-position:
+; Proposito:
+; Sym x L -> N o #f : Procedimiento que recibe un simbolo y una lista de simbolos. Retorna la posicion
+; (empezando en 0) de la primera aparicion del simbolo en la lista, o #f si no esta. Usa list-index
+; con eqv?. La usa buscar-variable para ubicar el valor de una variable dentro de un ambiente.
+;
+; Gramatica:
+;     <lista-simbolos> := ()
+;                      := (<simbolo> <lista-simbolos>)
 (define list-find-position
   (lambda (sym los)
     (list-index (lambda (sym1) (eqv? sym1 sym)) los)))
 
+; list-index:
+; Proposito:
+; P x L -> N o #f : Procedimiento que recibe un predicado P y una lista L. Retorna la posicion
+; (empezando en 0) del primer elemento de L que cumple P, o #f si ninguno lo cumple. Es auxiliar de
+; list-find-position.
+;
+; Gramatica:
+;     <lista> := ()
+;             := (<valor-de-scheme> <lista>)
 (define list-index
   (lambda (pred ls)
     (cond
@@ -428,7 +607,11 @@
   ;(1 2 3 "hola" "FLP")
   ;#(struct:ambiente-vacio))
 
-; Funcion para simular booleanos
+; valor-verdad?:
+; Proposito:
+; N -> B : Procedimiento que recibe un numero y retorna #f si es 0 y #t en cualquier otro caso. Asi
+; se simulan los booleanos del lenguaje (0 es falso, cualquier otro numero es verdadero). La usa
+; condicional-exp para decidir que rama evaluar.
 (define valor-verdad?
   (lambda (numero)
     (not (zero? numero))))
@@ -524,7 +707,7 @@
 ;;@decorate guarda el procedimiento que devuelve @saludar al recibir @integrantes y al invocarlo con 'evaluar @decorate() finEval'
 ;;se obtiene el saludo
 ;;
-;;Resultado esperado: "Hola:Daniel_y_Brandon_y_David_y_Lasprilla"
+;;Resultado esperado: "Hola:Daniel_Brandon_David_y_Lasprilla"
 ;
 ;declarar(
 ;
@@ -560,3 +743,4 @@
 ;; Se uso como apoyo de estudio, revision, aclarar conceptos, explicar, revisar la redaccion de
 ;; comentarios y entender errores. Para aclarar conceptos de SLLGEN, cerraduras, recursion y
 ;; decoradores.
+;; Ademas, la IA redacto los comentarios de proposito de los procedimientos del interpretador
